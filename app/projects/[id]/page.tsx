@@ -1,272 +1,278 @@
 "use client";
 import { useState } from "react";
-import { useProjectStore } from "@/store/useProjectStore";
 import { useParams, useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { useProjectStore } from "@/store/useProjectStore";
+import { TaskStatus } from "@/store/useProjectStore";
 import {
   ArrowLeft,
   Calendar,
   DollarSign,
   Clock,
-  CheckCircle,
-  Wallet,
+  CheckCircle2,
   Plus,
-  Check,
+  Trash2,
+  Tag,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
-const statusConfig = {
-  planning: {
-    label: "Planejamento",
-    color: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
-  },
-  in_progress: {
-    label: "Em Andamento",
-    color: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  },
-  done: {
-    label: "Finalizado",
-    color: "bg-green-500/10 text-green-400 border-green-500/20",
-  },
-  paid: {
-    label: "Pago",
-    color: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-  },
-};
-
-export default function ProjectPage() {
+export default function ProjectDetailsPage() {
   const { id } = useParams();
   const router = useRouter();
-  const { projects, updateProject, addTask, toggleTask } = useProjectStore();
-  const [newTask, setNewTask] = useState("");
+  const { projects, addTask, updateTaskStatus, deleteProject, updateProject } =
+    useProjectStore();
 
+  const [newTaskTitle, setNewTaskTitle] = useState("");
   const project = projects.find((p) => p.id === id);
 
-  if (!project) {
+  if (!project)
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-zinc-400">
-        <p className="text-xl font-semibold">Projeto não encontrado.</p>
-        <button
-          onClick={() => router.push("/")}
-          className="mt-4 text-indigo-400 underline hover:text-indigo-300 transition-colors"
-        >
-          Voltar ao Dashboard
-        </button>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <p className="text-zinc-500 animate-pulse">
+          Carregando detalhes do projeto...
+        </p>
       </div>
     );
-  }
 
-  const status = statusConfig[project.status];
-  const completedTasks = project.tasks.filter(
-    (t) => t.status === "done",
-  ).length;
-
-  const handleAddTask = () => {
-    if (newTask.trim()) {
-      addTask(project.id, newTask.trim());
-      setNewTask("");
+  const handleMarkAsPaid = async () => {
+    if (project.status === "paid") return;
+    const confirmed = confirm(
+      "Deseja marcar este projeto como LIQUIDADO? Isso atualizará seu faturamento no financeiro.",
+    );
+    if (confirmed) {
+      await updateProject(project.id, {
+        status: "paid",
+        paidAt: new Date().toISOString(),
+      });
     }
   };
 
+  const handleDelete = async () => {
+    if (confirm("Tem certeza que deseja excluir este projeto?")) {
+      await deleteProject(project.id);
+      router.push("/projects");
+    }
+  };
+
+  const handleAddTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaskTitle.trim()) return;
+    await addTask(project.id, newTaskTitle);
+    setNewTaskTitle("");
+  };
+
   return (
-    <div className="max-w-4xl mx-auto pb-20">
-      {/* Botão Voltar */}
-      <motion.button
-        initial={{ opacity: 0, x: -10 }}
-        animate={{ opacity: 1, x: 0 }}
-        onClick={() => router.push("/")}
-        className="flex items-center gap-2 text-zinc-500 hover:text-white transition-colors mb-8 group"
-      >
-        <ArrowLeft
-          size={18}
-          className="group-hover:-translate-x-1 transition-transform"
-        />
-        Voltar ao Dashboard
-      </motion.button>
-
-      {/* Título e Status */}
-      <motion.header
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12"
-      >
-        <div>
-          <h1 className="text-4xl font-extrabold text-white tracking-tight">
-            {project.name}
-          </h1>
-          <p className="text-zinc-500 text-lg mt-2 font-medium">
-            {project.client}
-          </p>
-        </div>
-        <div
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-sm w-fit ${status.color}`}
+    <div className="max-w-6xl mx-auto space-y-8">
+      {/* Top Bar */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => router.back()}
+          className="flex items-center gap-2 text-zinc-500 hover:text-white transition-colors group"
         >
-          {status.label}
-        </div>
-      </motion.header>
-
-      {/* Cards de Info */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8"
-      >
-        <div className="bg-[#121214]/80 backdrop-blur-md border border-[#27272a] p-6 rounded-2xl hover:border-zinc-700 transition-all">
-          <div className="flex items-center gap-2 text-zinc-500 text-sm mb-3">
-            <DollarSign size={16} className="text-green-500" />
-            Valor acordado
-          </div>
-          <p className="text-3xl font-bold text-white">
-            R$ {project.value.toLocaleString()}
-          </p>
-        </div>
-
-        <div className="bg-[#121214]/80 backdrop-blur-md border border-[#27272a] p-6 rounded-2xl hover:border-zinc-700 transition-all">
-          <div className="flex items-center gap-2 text-zinc-500 text-sm mb-3">
-            <Calendar size={16} className="text-blue-500" />
-            Criado em
-          </div>
-          <p className="text-3xl font-bold text-white">
-            {new Date(project.createdAt).toLocaleDateString("pt-BR", {
-              day: "2-digit",
-              month: "short",
-            })}
-          </p>
-        </div>
-      </motion.div>
-
-      {/* Descrição */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 }}
-        className="bg-[#121214]/80 backdrop-blur-md border border-[#27272a] p-8 rounded-3xl mb-8"
-      >
-        <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-[0.2em] mb-4">
-          Sobre o Projeto
-        </h2>
-        <p className="text-zinc-300 leading-relaxed text-lg">
-          {project.description || "Nenhuma descrição fornecida."}
-        </p>
-      </motion.div>
-
-      {/* Mudar Status */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="bg-[#121214]/80 backdrop-blur-md border border-[#27272a] p-8 rounded-3xl mb-8"
-      >
-        <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-[0.2em] mb-6">
-          Status do Projeto
-        </h2>
-        <div className="flex flex-wrap gap-3">
-          {(Object.keys(statusConfig) as Array<keyof typeof statusConfig>).map(
-            (key) => (
-              <button
-                key={key}
-                onClick={() => updateProject(project.id, { status: key })}
-                className={`px-6 py-3 rounded-xl text-sm font-bold border transition-all active:scale-95 ${
-                  project.status === key
-                    ? statusConfig[key].color
-                    : "bg-transparent border-[#27272a] text-zinc-600 hover:border-zinc-500 hover:text-zinc-300"
-                }`}
-              >
-                {statusConfig[key].label}
-              </button>
-            ),
-          )}
-        </div>
-      </motion.div>
-
-      {/* Checklist de Tarefas */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.25 }}
-        className="bg-[#121214]/80 backdrop-blur-md border border-[#27272a] p-8 rounded-3xl"
-      >
-        <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-[0.2em] mb-6 flex items-center justify-between">
-          Checklist
-          {project.tasks.length > 0 && (
-            <span
-              className={`transition-all duration-500 normal-case font-semibold text-sm ${
-                completedTasks === project.tasks.length &&
-                project.tasks.length > 0
-                  ? "text-green-400 drop-shadow-[0_0_8px_rgba(74,222,128,0.4)]"
-                  : "text-indigo-400"
-              }`}
-            >
-              {completedTasks === project.tasks.length &&
-              project.tasks.length > 0
-                ? "✓ Tudo pronto!"
-                : `${completedTasks} de ${project.tasks.length} concluídas`}
-            </span>
-          )}
-        </h2>
-
-        {/* Input nova tarefa */}
-        <div className="flex gap-3 mb-6">
-          <input
-            type="text"
-            value={newTask}
-            onChange={(e) => setNewTask(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAddTask()}
-            placeholder="Nova tarefa... (Enter para adicionar)"
-            className="flex-1 bg-[#09090b] border border-[#27272a] rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500 transition-all text-sm"
+          <ArrowLeft
+            size={20}
+            className="group-hover:-translate-x-1 transition-transform"
           />
-          <motion.button
-            onClick={handleAddTask}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white p-3 rounded-xl transition-all"
-          >
-            <Plus size={20} />
-          </motion.button>
-        </div>
+          Voltar para lista
+        </button>
 
-        {/* Lista de tarefas */}
-        <div className="space-y-3">
-          {project.tasks.length > 0 ? (
-            project.tasks.map((task) => (
-              <motion.div
-                key={task.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => toggleTask(project.id, task.id)}
-                className="flex items-center gap-4 p-4 bg-[#09090b]/70 backdrop-blur-sm border border-[#27272a] rounded-xl cursor-pointer hover:border-zinc-700 transition-all group"
+        <button
+          onClick={handleDelete}
+          className="text-zinc-700 hover:text-red-500 transition-colors p-2"
+          title="Excluir projeto"
+        >
+          <Trash2 size={20} />
+        </button>
+      </div>
+
+      {/* Grid Principal */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main Content: Kanban */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Header + Form */}
+          <div className="flex items-center justify-between bg-[#121214] border border-zinc-800/50 p-6 rounded-[24px]">
+            <h2 className="text-lg font-bold flex items-center gap-3">
+              <CheckCircle2 className="text-indigo-500" size={20} />
+              Quadro de Tarefas
+            </h2>
+            <form onSubmit={handleAddTask} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Nova tarefa..."
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                className="bg-[#0a0a0b] border border-zinc-800 text-xs text-white rounded-lg px-4 py-2 focus:border-indigo-500 outline-none w-48 transition-all"
+              />
+              <button
+                type="submit"
+                className="bg-indigo-600 p-2 rounded-lg hover:bg-indigo-500 transition-colors"
               >
-                <motion.div
-                  layout
-                  className={`w-6 h-6 rounded-md border flex items-center justify-center flex-shrink-0 transition-all ${
-                    task.status === "done"
-                      ? "bg-indigo-600 border-indigo-600"
-                      : "border-zinc-600 group-hover:border-zinc-400"
-                  }`}
-                >
-                  {task.status === "done" && (
-                    <Check size={14} className="text-white" />
-                  )}
-                </motion.div>
-                <span
-                  className={`text-sm transition-all ${
-                    task.status === "done"
-                      ? "line-through text-zinc-600"
-                      : "text-zinc-300"
-                  }`}
-                >
-                  {task.title}
-                </span>
-              </motion.div>
-            ))
-          ) : (
-            <p className="text-zinc-600 text-sm text-center py-6">
-              Nenhuma tarefa ainda. Adicione a primeira acima. ☝️
-            </p>
-          )}
+                <Plus size={16} />
+              </button>
+            </form>
+          </div>
+
+          {/* Colunas Kanban */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {(["todo", "doing", "done"] as const).map((status) => (
+              <div key={status} className="space-y-4">
+                {/* Header da Coluna */}
+                <div className="flex items-center gap-2 px-2">
+                  <div
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      status === "todo"
+                        ? "bg-zinc-500"
+                        : status === "doing"
+                          ? "bg-amber-500"
+                          : "bg-emerald-500"
+                    }`}
+                  />
+                  <h3 className="text-[10px] uppercase font-bold tracking-widest text-zinc-500">
+                    {status === "todo"
+                      ? "A fazer"
+                      : status === "doing"
+                        ? "Fazendo"
+                        : "Concluído"}
+                  </h3>
+                  <span className="text-[10px] text-zinc-700 bg-zinc-900 px-1.5 py-0.5 rounded ml-auto font-mono">
+                    {project.tasks.filter((t) => t.status === status).length}
+                  </span>
+                </div>
+
+                {/* Cards */}
+                <div className="space-y-3 min-h-[100px]">
+                  <AnimatePresence mode="popLayout">
+                    {project.tasks
+                      .filter((t) => t.status === status)
+                      .map((task) => (
+                        <motion.div
+                          key={task.id}
+                          layout
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.9 }}
+                          className="bg-[#121214] border border-zinc-800/50 p-4 rounded-xl group hover:border-indigo-500/30 transition-all"
+                        >
+                          <p
+                            className={`text-xs mb-4 transition-all ${
+                              task.status === "done"
+                                ? "text-zinc-500/50 line-through italic"
+                                : "text-zinc-200 font-medium"
+                            }`}
+                          >
+                            {task.title}
+                          </p>
+
+                          <div className="flex items-center justify-between pt-3 border-t border-zinc-900 group-hover:border-zinc-800 transition-all">
+                            <select
+                              value={task.status}
+                              onChange={(e) =>
+                                updateTaskStatus(
+                                  project.id,
+                                  task.id,
+                                  e.target.value as TaskStatus,
+                                )
+                              }
+                              className="bg-transparent text-[10px] text-zinc-600 hover:text-indigo-400 outline-none cursor-pointer uppercase font-bold tracking-tighter"
+                            >
+                              <option value="todo">Mover: Todo</option>
+                              <option value="doing">Mover: Doing</option>
+                              <option value="done">Mover: Done</option>
+                            </select>
+                          </div>
+                        </motion.div>
+                      ))}
+                  </AnimatePresence>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </motion.div>
+        {/* FIM Main Content */}
+
+        {/* Sidebar: Detalhes */}
+        <div className="space-y-6">
+          <div className="bg-[#121214] border border-zinc-800/50 rounded-[32px] p-8">
+            <div className="space-y-6">
+              <div>
+                <h1 className="text-2xl font-bold text-white mb-2">
+                  {project.name}
+                </h1>
+                <p className="text-zinc-500 text-sm flex items-center gap-2">
+                  <Tag size={14} className="text-zinc-700" />
+                  {project.client}
+                </p>
+              </div>
+
+              <div className="pt-6 border-t border-zinc-800/50 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-zinc-500">
+                    <DollarSign size={18} className="text-zinc-700" />
+                    <span className="text-sm">Valor</span>
+                  </div>
+                  <span className="font-bold text-emerald-500">
+                    {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    }).format(project.value)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-zinc-500">
+                    <Calendar size={18} className="text-zinc-700" />
+                    <span className="text-sm">Prazo</span>
+                  </div>
+                  <span className="font-medium text-zinc-300">
+                    {project.deadline || "S/ prazo"}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-zinc-500">
+                    <Clock size={18} className="text-zinc-700" />
+                    <span className="text-sm">Criado em</span>
+                  </div>
+                  <span className="font-medium text-zinc-400 text-xs">
+                    {new Date(project.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+
+                {/* Botão de Liquidação */}
+                <div className="pt-4">
+                  {project.status === "paid" ? (
+                    <div className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 py-3 rounded-2xl flex items-center justify-center gap-2 font-bold text-xs uppercase tracking-widest">
+                      <CheckCircle2 size={16} />
+                      Projeto Pago
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleMarkAsPaid}
+                      className="w-full bg-zinc-900 hover:bg-emerald-600 border border-zinc-800 hover:border-emerald-500 text-zinc-400 hover:text-white py-4 rounded-2xl flex items-center justify-center gap-2 font-bold text-xs uppercase tracking-widest transition-all group"
+                    >
+                      <DollarSign
+                        size={16}
+                        className="group-hover:scale-125 transition-transform"
+                      />
+                      Marcar como Pago
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-zinc-800/50">
+                <p className="text-zinc-600 text-[10px] uppercase font-bold tracking-widest mb-3">
+                  Descrição
+                </p>
+                <p className="text-zinc-400 text-sm leading-relaxed">
+                  {project.description || "Nenhuma descrição informada."}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* FIM Sidebar */}
+      </div>
+      {/* FIM Grid Principal */}
     </div>
   );
 }

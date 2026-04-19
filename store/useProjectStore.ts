@@ -1,6 +1,14 @@
-// store/useProjectStore.ts
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { db } from "../lib/firebase";
+import {
+  updateDoc,
+  deleteDoc,
+  doc,
+  setDoc,
+  getDocs,
+  collection,
+} from "firebase/firestore";
 
 export type ProjectStatus = "planning" | "in_progress" | "done" | "paid";
 export type TaskStatus = "todo" | "doing" | "done";
@@ -21,69 +29,132 @@ export interface Project {
   deadline?: string;
   tasks: Task[];
   createdAt: string;
+  paidAt?: string;
 }
 
 interface ProjectState {
   projects: Project[];
-  addProject: (project: Project) => void;
-  updateProject: (id: string, updatedProject: Partial<Project>) => void;
-  deleteProject: (id: string) => void;
-  addTask: (projectId: string, title: string) => void; // ✅ Nova
-  toggleTask: (projectId: string, taskId: string) => void; // ✅ Nova
+  fetchProjects: () => Promise<void>;
+  addProject: (project: Project) => Promise<void>;
+  updateProject: (
+    id: string,
+    updatedProject: Partial<Project>,
+  ) => Promise<void>;
+  deleteProject: (id: string) => Promise<void>;
+  addTask: (projectId: string, title: string) => Promise<void>;
+  toggleTask: (projectId: string, taskId: string) => Promise<void>;
+  updateTaskStatus: (
+    projectId: string,
+    taskId: string,
+    newStatus: TaskStatus,
+  ) => Promise<void>;
 }
 
 export const useProjectStore = create<ProjectState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       projects: [],
 
-      addProject: (project: Project) =>
-        set((state) => ({ projects: [...state.projects, project] })),
+      fetchProjects: async () => {
+        const querySnapshot = await getDocs(collection(db, "projects"));
+        const projectsData = querySnapshot.docs.map(
+          (doc) => doc.data() as Project,
+        );
+        set({ projects: projectsData });
+      },
 
-      updateProject: (id: string, updatedProject: Partial<Project>) =>
+      addProject: async (project: Project) => {
+        await setDoc(doc(db, "projects", project.id), project);
+        set((state) => ({ projects: [...state.projects, project] }));
+      },
+
+      updateProject: async (id: string, updatedProject: Partial<Project>) => {
+        const projectRef = doc(db, "projects", id);
+        await updateDoc(projectRef, updatedProject as { [x: string]: unknown });
         set((state) => ({
-          projects: state.projects.map((p) =>
-            p.id === id ? { ...p, ...updatedProject } : p,
+          projects: state.projects.map(
+            (p): Project => (p.id === id ? { ...p, ...updatedProject } : p),
           ),
-        })),
+        }));
+      },
 
-      deleteProject: (id: string) =>
+      deleteProject: async (id: string) => {
+        await deleteDoc(doc(db, "projects", id));
         set((state) => ({
           projects: state.projects.filter((p) => p.id !== id),
-        })),
+        }));
+      },
 
-      // ✅ Adiciona uma nova tarefa com status "todo" por padrão
-      addTask: (projectId: string, title: string) =>
-        set((state) => ({
-          projects: state.projects.map((p) =>
-            p.id === projectId
-              ? {
-                  ...p,
-                  tasks: [
-                    ...p.tasks,
-                    { id: crypto.randomUUID(), title, status: "todo" },
-                  ],
-                }
-              : p,
-          ),
-        })),
+      addTask: async (projectId: string, title: string) => {
+        const newTask: Task = {
+          id: crypto.randomUUID(),
+          title,
+          status: "todo",
+        };
+        const project = get().projects.find((p) => p.id === projectId);
 
-      // ✅ Alterna entre "todo" e "done" (simples por enquanto)
-      toggleTask: (projectId: string, taskId: string) =>
-        set((state) => ({
-          projects: state.projects.map((p) =>
-            p.id === projectId
-              ? {
-                  ...p,
-                  tasks: p.tasks.map((t) =>
-                    t.id === taskId
-                      ? { ...t, status: t.status === "done" ? "todo" : "done" }
-                      : t,
-                  ),
-                }
-              : p,
-          ),
-        })),
+        if (project) {
+          const updatedTasks = [...project.tasks, newTask];
+          await updateDoc(doc(db, "projects", projectId), {
+            tasks: updatedTasks,
+          });
+          set((state) => ({
+            projects: state.projects.map(
+              (p): Project =>
+                p.id === projectId ? { ...p, tasks: updatedTasks } : p,
+            ),
+          }));
+        }
+      },
+
+      toggleTask: async (projectId: string, taskId: string) => {
+        const project = get().projects.find((p) => p.id === projectId);
+
+        if (project) {
+          const updatedTasks = project.tasks.map(
+            (t): Task =>
+              t.id === taskId
+                ? { ...t, status: t.status === "done" ? "todo" : "done" }
+                : t,
+          );
+
+          await updateDoc(doc(db, "projects", projectId), {
+            tasks: updatedTasks,
+          });
+
+          set((state) => ({
+            projects: state.projects.map(
+              (p): Project =>
+                p.id === projectId ? { ...p, tasks: updatedTasks } : p,
+            ),
+          }));
+        }
+      },
+
+      updateTaskStatus: async (
+        projectId: string,
+        taskId: string,
+        newStatus: TaskStatus,
+      ) => {
+        const project = get().projects.find((p) => p.id === projectId);
+
+        if (project) {
+          const updatedTasks = project.tasks.map(
+            (t): Task => (t.id === taskId ? { ...t, status: newStatus } : t),
+          );
+
+          await updateDoc(doc(db, "projects", projectId), {
+            tasks: updatedTasks,
+          });
+
+          set((state) => ({
+            projects: state.projects.map(
+              (p): Project =>
+                p.id === projectId ? { ...p, tasks: updatedTasks } : p,
+            ),
+          }));
+        }
+      },
     }),
     {
       name: "freelaflow-storage",

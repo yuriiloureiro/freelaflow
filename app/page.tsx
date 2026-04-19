@@ -1,17 +1,39 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useProjectStore } from "@/store/useProjectStore";
-import { DollarSign, Briefcase, CheckCircle, Clock } from "lucide-react";
+import {
+  DollarSign,
+  Briefcase,
+  CheckCircle,
+  Clock,
+  Calendar,
+} from "lucide-react";
 import { motion } from "framer-motion";
 import NewProjectModal from "@/components/projects/NewProjectModal";
 import Link from "next/link";
 
 export default function Dashboard() {
-  const { projects } = useProjectStore();
+  const { projects, fetchProjects } = useProjectStore();
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const totalInvoiced = projects
     .filter((p) => p.status === "paid" || p.status === "done")
+    .reduce((acc, p) => acc + p.value, 0);
+
+  const now = new Date();
+  const currentMonthRevenue = projects
+    .filter((p) => p.status === "paid" && p.paidAt)
+    .filter((p) => {
+      const paidDate = new Date(p.paidAt!);
+      return (
+        paidDate.getMonth() === now.getMonth() &&
+        paidDate.getFullYear() === now.getFullYear()
+      );
+    })
     .reduce((acc, p) => acc + p.value, 0);
 
   const activeProjects = projects.filter(
@@ -45,6 +67,12 @@ export default function Dashboard() {
       value: new Set(projects.map((p) => p.client)).size,
       icon: <Briefcase className="text-zinc-400" />,
       color: "bg-zinc-500/10",
+    },
+    {
+      label: "Faturado este mês",
+      value: `R$ ${currentMonthRevenue.toLocaleString()}`,
+      icon: <Calendar className="text-purple-500" />,
+      color: "bg-purple-500/10",
     },
   ];
 
